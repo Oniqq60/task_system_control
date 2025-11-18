@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/Oniqq60/task_system_control/gen/proto/auth";
+
+// AuthService предоставляет методы для аутентификации и авторизации
+service AuthService {
+  // Register создаёт нового пользователя
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Login аутентифицирует пользователя и возвращает JWT токен
+  rpc Login(LoginRequest) returns (LoginResponse);
+  
+  // ValidateToken проверяет валидность JWT токена и возвращает информацию о пользователе
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+}
+
+// RegisterRequest - запрос на регистрацию
+message RegisterRequest {
+  string name = 1;        // Имя пользователя
+  string email = 2;       // Email (уникальный)
+  string password = 3;    // Пароль (будет захеширован)
+  string role = 4;        // Роль: "admin" или "employee" (по умолчанию "employee")
+}
+
+// RegisterResponse - ответ на регистрацию
+message RegisterResponse {
+  string id = 1;          // UUID пользователя
+  string email = 2;      // Email
+  string name = 3;       // Имя
+  string role = 4;       // Роль
+}
+
+// LoginRequest - запрос на вход
+message LoginRequest {
+  string email = 1;      // Email
+  string password = 2;   // Пароль
+}
+
+// LoginResponse - ответ на вход
+message LoginResponse {
+  string access_token = 1;  // JWT токен
+  int64 expires_in = 2;     // Время жизни токена в секундах
+  string user_id = 3;       // ID пользователя
+  string role = 4;          // Роль пользователя
+}
+
+// ValidateTokenRequest - запрос на валидацию токена
+message ValidateTokenRequest {
+  string token = 1;  // JWT токен для проверки
+}
+
+// ValidateTokenResponse - ответ на валидацию токена
+message ValidateTokenResponse {
+  bool valid = 1;        // Валиден ли токен
+  string user_id = 2;   // ID пользователя (если валиден)
+  string role = 3;      // Роль пользователя (если валиден)
+  string error = 4;      // Сообщение об ошибке (если токен невалиден)
+}
+

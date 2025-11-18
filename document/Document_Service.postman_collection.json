@@ -1,0 +1,210 @@
+{
+	"info": {
+		"_postman_id": "document-service-collection",
+		"name": "Document Service API",
+		"description": "Коллекция для тестирования Document Service. Все ручки принимают JWT как в заголовке Authorization, так и автоматически из httpOnly cookie Auth Service.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Загрузка документа (AddDocument)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": [],
+							"description": "Файл для загрузки"
+						},
+						{
+							"key": "task_id",
+							"value": "{{task_id}}",
+							"type": "text",
+							"description": "UUID задачи"
+						},
+						{
+							"key": "owner_id",
+							"value": "{{owner_id}}",
+							"type": "text",
+							"description": "UUID владельца документа"
+						},
+						{
+							"key": "filename",
+							"value": "report.pdf",
+							"type": "text",
+							"description": "Имя файла (опционально, если не указано - используется имя загруженного файла)"
+						},
+						{
+							"key": "content_type",
+							"value": "application/pdf",
+							"type": "text",
+							"description": "MIME тип (опционально, определяется автоматически)"
+						},
+						{
+							"key": "tags",
+							"value": "finance,2025",
+							"type": "text",
+							"description": "Теги через запятую или JSON массив (опционально)"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/documents",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"documents"
+					]
+				},
+				"description": "Загружает файл напрямую через multipart/form-data. Выберите файл в поле 'file', остальные поля заполните или оставьте пустыми (будут определены автоматически). Требуется роль admin или владелец owner_id."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Получить документ (GetDocument)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/documents/{{document_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"documents",
+						"{{document_id}}"
+					]
+				},
+				"description": "Возвращает метаданные и содержимое документа (в base64). Доступно админу или владельцу."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Удалить документ (DeleteDocument)",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/documents/{{document_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"documents",
+						"{{document_id}}"
+					]
+				},
+				"description": "Удаляет документ и объект в MinIO. Доступно админу или владельцу."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Список документов задачи (GetDocumentsByTask)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/documents/task/{{task_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"documents",
+						"task",
+						"{{task_id}}"
+					]
+				},
+				"description": "Возвращает список документов по задаче. Доступно только admin."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Список документов пользователя (GetDocumentsByOwner)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/documents/owner/{{owner_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"documents",
+						"owner",
+						"{{owner_id}}"
+					]
+				},
+				"description": "Возвращает документы пользователя. Доступно admin или владельцу."
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8082",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "JWT от Auth Service"
+		},
+		{
+			"key": "task_id",
+			"value": "",
+			"type": "string",
+			"description": "UUID задачи"
+		},
+		{
+			"key": "owner_id",
+			"value": "",
+			"type": "string",
+			"description": "UUID владельца документа"
+		},
+		{
+			"key": "document_id",
+			"value": "",
+			"type": "string",
+			"description": "ObjectID документа"
+		},
+		{
+			"key": "file_data_base64",
+			"value": "",
+			"type": "string",
+			"description": "Base64-представление содержимого файла"
+		}
+	]
+}
+

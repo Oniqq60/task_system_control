@@ -1,0 +1,174 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: taskdb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./task/migration/01_create_task.sql:/docker-entrypoint-initdb.d/01_create_task.sql
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  mongo:
+    image: mongo:6.0
+    platform: linux/amd64
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: taskdb
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth:
+    build:
+      context: .
+      dockerfile: ./auth/Dockerfile
+    environment:
+      HTTP_PORT: "8080"
+      GRPC_PORT: "9090"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: taskdb
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      JWT_SECRET: supersecret_here
+      JWT_TTL: "3600"
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  task:
+    build:
+      context: .
+      dockerfile: ./task/Dockerfile
+    environment:
+      HTTP_PORT: "8081"
+      GRPC_PORT: "9091"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: task
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: task-events
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      JWT_SECRET: supersecret_here
+    ports:
+      - "8081:8081"
+      - "9091:9091"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  document:
+    build:
+      context: .
+      dockerfile: ./document/Dockerfile
+    environment:
+      HTTP_PORT: "8082"
+      GRPC_PORT: "9093"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET: documents
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: taskdb
+      MONGODB_COLLECTION: documents
+      MAX_FILE_SIZE: "10485760"
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      JWT_SECRET: supersecret_here
+    ports:
+      - "8082:8082"
+      - "9093:9093"
+    depends_on:
+      minio:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  notification:
+    build:
+      context: .
+      dockerfile: ./notification/Dockerfile
+    environment:
+      HTTP_PORT: "8083"
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: task-events
+      KAFKA_GROUP_ID: notification-service
+      LOG_LEVEL: "info"
+    ports:
+      - "8083:8083"
+    depends_on:
+      kafka:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  minio_data:
+  mongo_data:
+

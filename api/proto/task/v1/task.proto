@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package task.v1;
+
+option go_package = "github.com/Oniqq60/task_system_control/gen/proto/task";
+
+// TaskService предоставляет методы для управления задачами
+service TaskService {
+  // CreateTask создаёт новую задачу
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  
+  // UpdateTask обновляет задачу (изменение статуса, сообщения)
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+  
+  // TaskList возвращает список задач
+  rpc TaskList(TaskListRequest) returns (TaskListResponse);
+}
+
+// CreateTaskRequest - запрос на создание задачи
+message CreateTaskRequest {
+  string message = 1;      // Описание задачи
+  string worker_id = 2;    // UUID сотрудника, которому назначается задача
+  string created_by = 3;   // UUID пользователя, создающего задачу (обычно admin)
+}
+
+// CreateTaskResponse - ответ на создание задачи
+message CreateTaskResponse {
+  string id = 1;          // UUID задачи
+  string message = 2;     // Описание задачи
+  string status = 3;      // Статус задачи
+  string worker_id = 4;   // UUID сотрудника
+  string created_by = 5;  // UUID создателя
+}
+
+// UpdateTaskRequest - запрос на обновление задачи
+message UpdateTaskRequest {
+  string id = 1;          // UUID задачи
+  string message = 2;     // Новое описание задачи (опционально)
+  string status = 3;      // Новый статус (IN_PROGRESS, COMPLETED, NEEDS_HELP)
+  string reason = 4;      // Причина для статуса NEEDS_HELP (опционально)
+}
+
+// UpdateTaskResponse - ответ на обновление задачи
+message UpdateTaskResponse {
+  string id = 1;          // UUID задачи
+  string message = 2;     // Описание задачи
+  string status = 3;      // Статус задачи
+  string worker_id = 4;   // UUID сотрудника
+  string reason = 5;      // Причина (если статус NEEDS_HELP)
+}
+
+// TaskListRequest - запрос на получение списка задач
+message TaskListRequest {
+  string worker_id = 1;   // UUID сотрудника (опционально, для фильтрации)
+  string created_by = 2;  // UUID создателя (опционально, для фильтрации)
+  string status = 3;      // Статус задачи (опционально, для фильтрации)
+}
+
+// TaskListResponse - ответ со списком задач
+message TaskListResponse {
+  repeated Task tasks = 1;  // Список задач
+}
+
+// Task - информация о задаче
+message Task {
+  string id = 1;          // UUID задачи
+  string message = 2;     // Описание задачи
+  string status = 3;      // Статус задачи
+  string worker_id = 4;   // UUID сотрудника
+  string created_by = 5;  // UUID создателя
+  string reason = 6;      // Причина (если статус NEEDS_HELP)
+  int64 created_at = 7;   // Timestamp создания
+  int64 updated_at = 8;   // Timestamp обновления
+}
+

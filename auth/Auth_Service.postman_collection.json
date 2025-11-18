@@ -1,0 +1,234 @@
+{
+	"info": {
+		"_postman_id": "auth-service-collection",
+		"name": "Auth Service API",
+		"description": "Коллекция для тестирования Auth Service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Регистрация пользователя (Register)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"name\": \"{{name}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"role\": \"{{role}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/register",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"auth",
+						"register"
+					]
+				},
+				"description": "Создаёт нового пользователя. role: ADMIN или EMPLOYEE"
+			},
+			"response": []
+		},
+		{
+			"name": "2. Логин (Login)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/auth/login",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"auth",
+						"login"
+					]
+				},
+				"description": "Возвращает access_token, устанавливает httpOnly cookie и сообщает срок жизни токена."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Выход (Logout)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/auth/logout",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"auth",
+						"logout"
+					]
+				},
+				"description": "Отзывает текущий JWT: добавляет его в чёрный список до истечения и очищает auth-cookie."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Профиль (Profile)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/auth/profile",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"auth",
+						"profile"
+					]
+				},
+				"description": "Возвращает данные пользователя по текущему access_token — можно передать заголовок Authorization или полагаться на httpOnly cookie."
+			},
+			"response": []
+		},
+		{
+			"name": "gRPC: AuthService/Register",
+			"protocolProfileBehavior": {
+				"type": "grpc"
+			},
+			"request": {
+				"method": "POST",
+				"url": "grpc://localhost:9090",
+				"body": {
+					"mode": "grpc",
+					"grpc": {
+						"service": "auth.v1.AuthService",
+						"method": "Register",
+						"metadata": [],
+						"message": {
+							"name": "{{name}}",
+							"email": "{{email}}",
+							"password": "{{password}}",
+							"role": "{{role}}"
+						}
+					}
+				},
+				"description": "gRPC вызов Register на :9090"
+			},
+			"response": []
+		},
+		{
+			"name": "gRPC: AuthService/Login",
+			"protocolProfileBehavior": {
+				"type": "grpc"
+			},
+			"request": {
+				"method": "POST",
+				"url": "grpc://localhost:9090",
+				"body": {
+					"mode": "grpc",
+					"grpc": {
+						"service": "auth.v1.AuthService",
+						"method": "Login",
+						"metadata": [],
+						"message": {
+							"email": "{{email}}",
+							"password": "{{password}}"
+						}
+					}
+				},
+				"description": "gRPC вызов Login на :9090"
+			},
+			"response": []
+		},
+		{
+			"name": "gRPC: AuthService/ValidateToken",
+			"protocolProfileBehavior": {
+				"type": "grpc"
+			},
+			"request": {
+				"method": "POST",
+				"url": "grpc://localhost:9090",
+				"body": {
+					"mode": "grpc",
+					"grpc": {
+						"service": "auth.v1.AuthService",
+						"method": "ValidateToken",
+						"metadata": [],
+						"message": {
+							"token": "{{access_token}}"
+						}
+					}
+				},
+				"description": "gRPC вызов ValidateToken на :9090"
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "name",
+			"value": "User Name",
+			"type": "string"
+		},
+		{
+			"key": "email",
+			"value": "user@example.com",
+			"type": "string"
+		},
+		{
+			"key": "password",
+			"value": "password123",
+			"type": "string"
+		},
+		{
+			"key": "role",
+			"value": "EMPLOYEE",
+			"type": "string",
+			"description": "ADMIN или EMPLOYEE"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "JWT от Login"
+		}
+	]
+}
+
+
+

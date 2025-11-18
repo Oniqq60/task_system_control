@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package document.v1;
+
+option go_package = "github.com/Oniqq60/task_system_control/gen/proto/document";
+
+// DocumentService предоставляет методы для управления документами
+service DocumentService {
+  // AddDocument добавляет документ к задаче
+  rpc AddDocument(AddDocumentRequest) returns (AddDocumentResponse);
+  
+  // DeleteDocument удаляет документ
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+  
+  // GetDocument получает документ и файл
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
+  
+  // GetDocumentsByTask возвращает список документов задачи
+  rpc GetDocumentsByTask(GetDocumentsByTaskRequest) returns (GetDocumentsByTaskResponse);
+  
+  // GetDocumentsByOwner возвращает список документов пользователя
+  rpc GetDocumentsByOwner(GetDocumentsByOwnerRequest) returns (GetDocumentsByOwnerResponse);
+}
+
+// AddDocumentRequest - запрос на добавление документа
+message AddDocumentRequest {
+  string task_id = 1;        // UUID задачи
+  string owner_id = 2;       // UUID пользователя
+  bytes file_content = 3;    // Содержимое файла
+  string filename = 4;       // Имя файла
+  string content_type = 5;   // MIME тип (application/pdf, image/jpeg, etc.)
+  repeated string tags = 6;  // Теги для поиска
+}
+
+// AddDocumentResponse - ответ на добавление документа
+message AddDocumentResponse {
+  string id = 1;             // ObjectID документа
+  string filename = 2;       // Имя файла
+  string content_type = 3;   // MIME тип
+  int64 size = 4;            // Размер файла в байтах
+  string task_id = 5;        // UUID задачи
+  string owner_id = 6;       // UUID пользователя
+  repeated string tags = 7;  // Теги
+  int64 uploaded_at = 8;     // Timestamp загрузки
+}
+
+// DeleteDocumentRequest - запрос на удаление документа
+message DeleteDocumentRequest {
+  string id = 1;             // ObjectID документа
+  string owner_id = 2;       // UUID пользователя (для проверки прав)
+}
+
+// DeleteDocumentResponse - ответ на удаление документа
+message DeleteDocumentResponse {
+  bool success = 1;          // Успешно ли удаление
+}
+
+// GetDocumentRequest - запрос на получение документа
+message GetDocumentRequest {
+  string id = 1;             // ObjectID документа
+}
+
+// GetDocumentResponse - ответ с документом и файлом
+message GetDocumentResponse {
+  string id = 1;             // ObjectID документа
+  string filename = 2;       // Имя файла
+  string content_type = 3;   // MIME тип
+  int64 size = 4;            // Размер файла в байтах
+  bytes file_content = 5;    // Содержимое файла
+  string task_id = 6;        // UUID задачи
+  string owner_id = 7;       // UUID пользователя
+  repeated string tags = 8;  // Теги
+  int64 uploaded_at = 9;     // Timestamp загрузки
+}
+
+// GetDocumentsByTaskRequest - запрос на получение документов задачи
+message GetDocumentsByTaskRequest {
+  string task_id = 1;        // UUID задачи
+}
+
+// GetDocumentsByTaskResponse - ответ со списком документов задачи
+message GetDocumentsByTaskResponse {
+  repeated Document documents = 1;
+}
+
+// GetDocumentsByOwnerRequest - запрос на получение документов пользователя
+message GetDocumentsByOwnerRequest {
+  string owner_id = 1;       // UUID пользователя
+}
+
+// GetDocumentsByOwnerResponse - ответ со списком документов пользователя
+message GetDocumentsByOwnerResponse {
+  repeated Document documents = 1;
+}
+
+// Document - информация о документе
+message Document {
+  string id = 1;             // ObjectID документа
+  string filename = 2;       // Имя файла
+  string content_type = 3;   // MIME тип
+  int64 size = 4;            // Размер файла в байтах
+  string task_id = 5;        // UUID задачи
+  string owner_id = 6;       // UUID пользователя
+  repeated string tags = 7;  // Теги
+  int64 uploaded_at = 8;     // Timestamp загрузки
+}
+
