@@ -15,13 +15,14 @@ const (
 )
 
 type Users struct {
-	ID              uuid.UUID `json:"id"`
-	Name            string    `json:"name"`
-	Email           string    `json:"email"`
-	Password_hash   string    `json:"password_hash"`
-	Role            Role      `json:"role"`
-	Completed_tasks int64     `json:"completed_tasks"`
-	Created_at      time.Time `json:"created_at"`
+	ID              uuid.UUID  `json:"id"`
+	Name            string     `json:"name"`
+	Email           string     `json:"email"`
+	Password_hash   string     `json:"password_hash"`
+	Role            Role       `json:"role"`
+	ManagerID       *uuid.UUID `json:"manager_id" gorm:"type:uuid"`
+	Completed_tasks int64      `json:"completed_tasks"`
+	Created_at      time.Time  `json:"created_at"`
 }
 
 type Claims struct {

@@ -2,17 +2,16 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	pb "github.com/Oniqq60/task_system_control/gen/proto/auth/v1"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	pb "github.com/Oniqq60/task_system_control/gen/proto/auth"
 )
 
-// GrpcHandler реализует gRPC сервер для Auth Service
 type GrpcHandler struct {
 	pb.UnimplementedAuthServiceServer
 	service   UserService
@@ -35,7 +34,6 @@ func (h *GrpcHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		return nil, status.Error(codes.InvalidArgument, "email and password required")
 	}
 
-	// Валидация и нормализация роли
 	role := RoleEmployee
 	if req.Role != "" {
 		switch Role(req.Role) {
@@ -52,9 +50,19 @@ func (h *GrpcHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		ID:            uuid.New(),
 		Name:          req.Name,
 		Email:         req.Email,
-		Password_hash: req.Password, // будет захеширован в service
+		Password_hash: req.Password,
 		Role:          role,
 		Created_at:    time.Now(),
+	}
+	if req.ManagerId != "" {
+		managerID, err := uuid.Parse(req.ManagerId)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid manager_id")
+		}
+		if role == RoleAdmin {
+			return nil, status.Error(codes.InvalidArgument, "admin cannot have manager")
+		}
+		user.ManagerID = &managerID
 	}
 
 	if err := h.service.Register(ctx, user); err != nil {
@@ -75,7 +83,6 @@ func (h *GrpcHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		return nil, status.Error(codes.InvalidArgument, "email and password required")
 	}
 
-	// Rate limiting (упрощённая версия, можно улучшить)
 	key := "auth:login:attempts:grpc:" + req.Email
 	if cnt, err := h.rdb.Get(ctx, key).Int64(); err == nil && cnt >= 5 {
 		return nil, status.Error(codes.ResourceExhausted, "too many attempts")
@@ -83,7 +90,7 @@ func (h *GrpcHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 
 	user, claims, err := h.service.Login(ctx, req.Email, req.Password)
 	if err != nil {
-		// Увеличиваем счётчик попыток
+
 		val, _ := h.rdb.Incr(ctx, key).Result()
 		if val == 1 {
 			_ = h.rdb.Expire(ctx, key, 10*time.Minute).Err()
@@ -91,7 +98,6 @@ func (h *GrpcHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
-	// Успешный вход - сбрасываем счётчик
 	_ = h.rdb.Del(ctx, key).Err()
 
 	token, err := SignToken(claims, h.jwtSecret)
@@ -121,7 +127,6 @@ func (h *GrpcHandler) ValidateToken(ctx context.Context, req *pb.ValidateTokenRe
 		}, nil
 	}
 
-	// Парсим и валидируем токен
 	claims, err := ParseToken(req.Token, h.jwtSecret)
 	if err != nil {
 		return &pb.ValidateTokenResponse{
@@ -159,4 +164,32 @@ func (h *GrpcHandler) ValidateToken(ctx context.Context, req *pb.ValidateTokenRe
 		UserId: claims.UserID.String(),
 		Role:   string(claims.Role),
 	}, nil
+}
+
+// GetManager возвращает manager_id для сотрудника, если он назначен.
+func (h *GrpcHandler) GetManager(ctx context.Context, req *pb.GetManagerRequest) (*pb.GetManagerResponse, error) {
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	userID, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
+	}
+
+	managerID, found, err := h.service.GetManager(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, status.Error(codes.NotFound, "user not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to fetch manager")
+	}
+
+	resp := &pb.GetManagerResponse{
+		Found: found,
+	}
+	if found {
+		resp.ManagerId = managerID.String()
+	}
+	return resp, nil
 }

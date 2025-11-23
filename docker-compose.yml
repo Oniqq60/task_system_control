@@ -84,7 +84,7 @@ services:
       DB_NAME: taskdb
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ""
-      JWT_SECRET: supersecret_here
+      JWT_SECRET: this_is_a_very_secure_jwt_secret_that_is_at_least_32_chars_long_2025
       JWT_TTL: "3600"
     ports:
       - "8080:8080"
@@ -111,7 +111,6 @@ services:
       KAFKA_TOPIC: task-events
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ""
-      JWT_SECRET: supersecret_here
     ports:
       - "8081:8081"
       - "9091:9091"
@@ -137,9 +136,9 @@ services:
       MONGODB_DATABASE: taskdb
       MONGODB_COLLECTION: documents
       MAX_FILE_SIZE: "10485760"
+      JWT_SECRET: this_is_a_very_secure_jwt_secret_that_is_at_least_32_chars_long_2025
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ""
-      JWT_SECRET: supersecret_here
     ports:
       - "8082:8082"
       - "9093:9093"
@@ -161,11 +160,37 @@ services:
       KAFKA_TOPIC: task-events
       KAFKA_GROUP_ID: notification-service
       LOG_LEVEL: "info"
+      AUTH_GRPC_ADDR: auth:9090
     ports:
       - "8083:8083"
     depends_on:
+      auth:
+        condition: service_started
       kafka:
         condition: service_started
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./api_gateway/Dockerfile
+    environment:
+      HTTP_PORT: "8084"
+      GRPC_PORT: "9094"
+      AUTH_SERVICE_ADDR: auth:9090
+      TASK_SERVICE_ADDR: task:9091
+      DOCUMENT_SERVICE_ADDR: document:9093
+      JWT_SECRET: this_is_a_very_secure_jwt_secret_that_is_at_least_32_chars_long_2025
+    ports:
+      - "8084:8084"
+      - "9094:9094"
+    depends_on:
+      auth:
+        condition: service_started
+      task:
+        condition: service_started  
+      document:
+        condition: service_started
+    restart: on-failure
 
 volumes:
   postgres_data:

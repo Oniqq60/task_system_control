@@ -41,7 +41,7 @@ func ParseToken(tokenString string, secret []byte) (Claims, error) {
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
-		// Если UserID не заполнен, но Subject есть, извлекаем UserID из Subject
+
 		if claims.UserID == uuid.Nil && claims.Subject != "" {
 			userID, err := uuid.Parse(claims.Subject)
 			if err == nil {

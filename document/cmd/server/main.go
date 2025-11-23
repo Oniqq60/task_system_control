@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/Oniqq60/task_system_control/document/internal/cfg"
-	idoc "github.com/Oniqq60/task_system_control/document/internal/document"
+	appcfg "github.com/Oniqq60/task_system_control/document/internal/cfg"
+	"github.com/Oniqq60/task_system_control/document/internal/document"
 	pb "github.com/Oniqq60/task_system_control/gen/proto/document"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,115 +22,108 @@ import (
 )
 
 func main() {
-	config := cfg.LoadConfig()
-	if len(config.JWTSecret) < 32 {
-		log.Fatalf("JWT_SECRET must be at least 32 characters long for security")
-	}
+	conf := appcfg.LoadConfig()
+	logger := log.New(os.Stdout, "[document] ", log.LstdFlags|log.Lmicroseconds)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(config.MongoURI))
-	if err != nil {
-		log.Fatalf("failed to connect mongo: %v", err)
-	}
+	mongoClient := mustConnectMongo(ctx, conf.MongoURI)
 	defer func() {
-		if err := mongoClient.Disconnect(context.Background()); err != nil {
-			log.Printf("mongo disconnect error: %v", err)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := mongoClient.Disconnect(shutdownCtx); err != nil {
+			logger.Printf("mongo disconnect error: %v", err)
 		}
 	}()
 
-	coll := mongoClient.Database(config.MongoDatabase).Collection(config.MongoCollection)
+	collection := mongoClient.Database(conf.MongoDatabase).Collection(conf.MongoCollection)
+	repo := document.NewRepository(collection)
 
-	storage, err := idoc.NewMinioStorage(
-		config.MinioEndpoint,
-		config.MinioAccessKey,
-		config.MinioSecretKey,
-		config.MinioUseSSL,
-		config.MinioBucket,
+	storage, err := document.NewMinioStorage(
+		conf.MinioEndpoint,
+		conf.MinioAccessKey,
+		conf.MinioSecretKey,
+		conf.MinioUseSSL,
+		conf.MinioBucket,
 	)
 	if err != nil {
-		log.Fatalf("failed to init minio: %v", err)
+		logger.Fatalf("failed to connect to MinIO: %v", err)
 	}
 
-	var redisClient *redis.Client
-	if config.RedisAddr != "" {
-		redisClient = redis.NewClient(&redis.Options{
-			Addr:     config.RedisAddr,
-			Password: config.RedisPassword,
-			DB:       0,
-		})
-		if err := redisClient.Ping(context.Background()).Err(); err != nil {
-			log.Fatalf("failed to connect redis: %v", err)
-		}
-	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     conf.RedisAddr,
+		Password: conf.RedisPassword,
+	})
+	defer redisClient.Close()
 
-	repo := idoc.NewRepository(coll)
-	service := idoc.NewService(repo, storage)
+	service := document.NewService(repo, storage)
+	authorizer := document.NewAuthorizer([]byte(conf.JWTSecret), redisClient)
+	grpcHandler := document.NewGrpcHandler(service, conf.MaxFileSizeBytes, authorizer)
 
-	handler := idoc.NewHandler(service, []byte(config.JWTSecret), config.MaxFileSizeBytes, redisClient)
-	httpMux := handler.Routes()
-
-	// Применяем middleware
-	handlerWithMiddleware := idoc.SecurityHeadersMiddleware(
-		idoc.CORSMiddleware(httpMux),
-	)
-
-	httpPort := config.HTTPPort
-	if httpPort == "" {
-		httpPort = "8082"
-	}
+	httpMux := http.NewServeMux()
 	httpServer := &http.Server{
-		Addr:    ":" + httpPort,
-		Handler: handlerWithMiddleware,
+		Addr:    ":" + pickPort(conf.HTTPPort, "8082"),
+		Handler: applyHTTPMiddleware(httpMux),
 	}
 
-	grpcPort := config.GRPCPort
-	if grpcPort == "" {
-		grpcPort = "9093"
-	}
-
-	grpcListener, err := net.Listen("tcp", ":"+grpcPort)
+	grpcListener, err := net.Listen("tcp", ":"+pickPort(conf.GRPCPort, "9093"))
 	if err != nil {
-		log.Fatalf("failed to listen grpc: %v", err)
+		logger.Fatalf("failed to listen on gRPC port: %v", err)
 	}
-
 	grpcServer := grpc.NewServer()
-	authorizer := idoc.NewAuthorizer([]byte(config.JWTSecret), redisClient)
-	grpcHandler := idoc.NewGrpcHandler(service, config.MaxFileSizeBytes, authorizer)
 	pb.RegisterDocumentServiceServer(grpcServer, grpcHandler)
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	errCh := make(chan error, 2)
 
 	go func() {
-		defer wg.Done()
-		log.Printf("HTTP server listening on :%s", httpPort)
+		logger.Printf("HTTP server listening on %s", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("http server error: %v", err)
+			errCh <- fmt.Errorf("http server: %w", err)
 		}
 	}()
 
 	go func() {
-		defer wg.Done()
-		log.Printf("gRPC server listening on :%s", grpcPort)
+		logger.Printf("gRPC server listening on %s", grpcListener.Addr().String())
 		if err := grpcServer.Serve(grpcListener); err != nil {
-			log.Fatalf("grpc server error: %v", err)
+			errCh <- fmt.Errorf("grpc server: %w", err)
 		}
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
-	log.Println("shutdown signal received")
+	select {
+	case <-ctx.Done():
+		logger.Println("shutdown signal received")
+	case err := <-errCh:
+		logger.Printf("server error: %v", err)
+	}
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer shutdownCancel()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Printf("http shutdown error: %v", err)
+		logger.Printf("http shutdown error: %v", err)
 	}
 	grpcServer.GracefulStop()
+	logger.Println("document service stopped")
+}
 
-	wg.Wait()
+func mustConnectMongo(ctx context.Context, uri string) *mongo.Client {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		log.Fatalf("failed to connect to mongo: %v", err)
+	}
+	return client
+}
+
+func applyHTTPMiddleware(handler http.Handler) http.Handler {
+	h := document.CORSMiddleware(handler)
+	h = document.SecurityHeadersMiddleware(h)
+	return h
+}
+
+func pickPort(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

@@ -2,134 +2,146 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	pb "github.com/Oniqq60/task_system_control/gen/proto/task"
 	"github.com/Oniqq60/task_system_control/task/internal/cfg"
-	itask "github.com/Oniqq60/task_system_control/task/internal/task"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/redis/go-redis/v9"
+	"github.com/Oniqq60/task_system_control/task/internal/task"
 	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
-	cfg := cfg.LoadConfig()
+	conf := cfg.LoadConfig()
+	logger := log.New(os.Stdout, "[task] ", log.LstdFlags|log.Lmicroseconds)
 
-	if len(cfg.JWTSecret) < 32 {
-		log.Fatalf("JWT_SECRET must be at least 32 characters long for security")
-	}
-
-	// Build Postgres DSN
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
-	)
-
-	// Connect Postgres using pgx stdlib driver
-	db, err := sql.Open("pgx", dsn)
+	db := mustConnectDB(conf)
+	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("postgres open error: %v", err)
+		logger.Fatalf("failed to access sql DB: %v", err)
 	}
-	defer db.Close()
+	defer sqlDB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		log.Fatalf("postgres ping error: %v", err)
+	brokers := splitCSV(conf.KafkaBrokers)
+	if len(brokers) == 0 {
+		logger.Fatal("KAFKA_BROKERS must be set")
 	}
-	log.Println("postgres connected")
+	if conf.KafkaTopic == "" {
+		logger.Fatal("KAFKA_TOPIC must be set")
+	}
+	producer := task.NewKafkaProducer(brokers, conf.KafkaTopic)
+	defer producer.Close()
 
-	var redisClient *redis.Client
-	if cfg.RedisAddr != "" {
-		redisClient = redis.NewClient(&redis.Options{
-			Addr:     cfg.RedisAddr,
-			Password: cfg.RedisPassword,
-			DB:       0,
-		})
-		if err := redisClient.Ping(context.Background()).Err(); err != nil {
-			log.Fatalf("redis ping error: %v", err)
-		}
-		log.Println("redis connected")
-		defer redisClient.Close()
+	repo := task.NewRepository(db)
+	service := task.NewTaskService(repo, producer)
+	grpcHandler := task.NewGrpcHandler(service)
+
+	httpMux := http.NewServeMux()
+	httpServer := &http.Server{
+		Addr:    ":" + pickPort(conf.HTTPPort, "8081"),
+		Handler: applyHTTPMiddleware(httpMux),
 	}
 
-	// Init GORM for repository layer
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{DSN: dsn}), &gorm.Config{})
+	grpcListener, err := net.Listen("tcp", ":"+pickPort(conf.GrpsPort, "9091"))
 	if err != nil {
-		log.Fatalf("gorm open error: %v", err)
+		logger.Fatalf("failed to listen on gRPC port: %v", err)
 	}
-
-	// Подключение Kafka producer
-	var kafkaProducer itask.KafkaProducer
-	if cfg.KafkaBrokers != "" && cfg.KafkaTopic != "" {
-		brokers := strings.Split(cfg.KafkaBrokers, ",")
-		for i := range brokers {
-			brokers[i] = strings.TrimSpace(brokers[i])
-		}
-		kafkaProducer = itask.NewKafkaProducer(brokers, cfg.KafkaTopic)
-		log.Println("Kafka producer connected")
-		defer kafkaProducer.Close()
-	} else {
-		log.Println("Kafka not configured, events will not be sent")
-	}
-
-	// Wire
-	repo := itask.NewRepository(gormDB)
-	service := itask.NewTaskService(repo, kafkaProducer)
-	handler := itask.NewHandler(service, []byte(cfg.JWTSecret), redisClient)
-	grpcHandler := itask.NewGrpcHandler(service)
-
-	// HTTP Server
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /task", handler.CreateTask)
-	mux.HandleFunc("PATCH /task/{id}", handler.UpdateTask)
-	mux.HandleFunc("GET /task", handler.TaskList)
-
-	// Применяем middleware
-	handlerWithMiddleware := itask.SecurityHeadersMiddleware(
-		itask.CORSMiddleware(
-			itask.RequestSizeLimitMiddleware(1024 * 1024)(mux), // 1MB limit
-		),
-	)
-
-	httpPort := cfg.HTTPPort
-	if httpPort == "" {
-		httpPort = "8081"
-	}
-
-	// gRPC Server
-	grpcPort := cfg.GrpsPort
-	if grpcPort == "" {
-		grpcPort = "9091"
-	}
-
-	grpcListener, err := net.Listen("tcp", ":"+grpcPort)
-	if err != nil {
-		log.Fatalf("failed to listen on gRPC port %s: %v", grpcPort, err)
-	}
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterTaskServiceServer(grpcServer, grpcHandler)
 
-	// Запускаем gRPC сервер в отдельной goroutine
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 2)
+
 	go func() {
-		log.Printf("gRPC server listening on :%s", grpcPort)
-		if err := grpcServer.Serve(grpcListener); err != nil {
-			log.Fatalf("gRPC server error: %v", err)
+		logger.Printf("HTTP server listening on %s", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("http server: %w", err)
 		}
 	}()
 
-	// Запускаем HTTP сервер
-	srv := &http.Server{Addr: ":" + httpPort, Handler: handlerWithMiddleware}
-	log.Printf("http server listening on :%s", httpPort)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("http server error: %v", err)
+	go func() {
+		logger.Printf("gRPC server listening on %s", grpcListener.Addr().String())
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			errCh <- fmt.Errorf("grpc server: %w", err)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Println("shutdown signal received")
+	case err := <-errCh:
+		logger.Printf("server error: %v", err)
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Printf("http shutdown error: %v", err)
+	}
+	grpcServer.GracefulStop()
+	logger.Println("task service stopped")
+}
+
+func mustConnectDB(conf cfg.Config) *gorm.DB {
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		conf.DBHost,
+		conf.DBPort,
+		conf.DBUser,
+		conf.DBPassword,
+		conf.DBName,
+	)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("failed to init sql DB: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	return db
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	var result []string
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
+}
+
+func applyHTTPMiddleware(mux *http.ServeMux) http.Handler {
+	handler := http.Handler(mux)
+	handler = task.RequestSizeLimitMiddleware(5 << 20)(handler)
+	handler = task.CORSMiddleware(handler)
+	handler = task.SecurityHeadersMiddleware(handler)
+	return handler
+}
+
+func pickPort(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

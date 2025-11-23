@@ -41,21 +41,22 @@ type Requester struct {
 }
 
 var (
-	ErrForbidden           = errors.New("forbidden")
-	ErrFileTooLarge        = errors.New("file too large")
-	ErrInvalidContentType  = errors.New("content type required")
-	ErrInvalidDocumentID   = errors.New("invalid document id")
-	ErrInvalidTaskID       = errors.New("invalid task id")
-	ErrInvalidOwnerID      = errors.New("invalid owner id")
-	ErrEmptyFilename       = errors.New("filename required")
-	ErrEmptyContent        = errors.New("file content required")
-	errMaxSizeNotSpecified = errors.New("max file size not specified")
+	ErrForbidden          = errors.New("forbidden")
+	ErrFileTooLarge       = errors.New("file too large")
+	ErrInvalidContentType = errors.New("content type required")
+	ErrInvalidDocumentID  = errors.New("invalid document id")
+	ErrInvalidTaskID      = errors.New("invalid task id")
+	ErrInvalidOwnerID     = errors.New("invalid owner id")
+	ErrEmptyFilename      = errors.New("filename required")
+	ErrEmptyContent       = errors.New("file content required")
 )
 
 type service struct {
 	repo    Repository
 	storage ObjectStorage
 }
+
+var errMaxSizeNotSpecified = errors.New("max file size not specified")
 
 func NewService(repo Repository, storage ObjectStorage) Service {
 	return &service{

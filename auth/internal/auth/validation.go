@@ -7,13 +7,13 @@ import (
 	"unicode"
 )
 
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
 var (
 	ErrInvalidEmail    = errors.New("invalid email format")
 	ErrInvalidPassword = errors.New("password must be at least 8 characters long")
 	ErrInvalidName     = errors.New("name must be between 1 and 100 characters")
 )
-
-var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 // ValidateEmail проверяет формат email
 func ValidateEmail(email string) error {
@@ -21,7 +21,7 @@ func ValidateEmail(email string) error {
 	if email == "" {
 		return ErrInvalidEmail
 	}
-	if len(email) > 254 { // RFC 5321
+	if len(email) > 254 {
 		return ErrInvalidEmail
 	}
 	if !emailRegex.MatchString(email) {
@@ -38,7 +38,7 @@ func ValidatePassword(password string) error {
 	if len(password) > 128 {
 		return ErrInvalidPassword
 	}
-	// Проверяем наличие хотя бы одной буквы и одной цифры
+
 	hasLetter := false
 	hasDigit := false
 	for _, r := range password {
@@ -64,7 +64,7 @@ func ValidateName(name string) error {
 	if len(name) == 0 || len(name) > 100 {
 		return ErrInvalidName
 	}
-	// Проверяем на наличие только допустимых символов
+
 	for _, r := range name {
 		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' && r != '-' && r != '_' {
 			return ErrInvalidName

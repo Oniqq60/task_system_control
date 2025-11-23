@@ -17,7 +17,6 @@ type TaskEvent struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// KafkaProducer отправляет события в Kafka
 type KafkaProducer interface {
 	SendTaskEvent(ctx context.Context, event TaskEvent) error
 	Close() error
@@ -28,7 +27,6 @@ type kafkaProducer struct {
 	topic  string
 }
 
-// NewKafkaProducer создаёт новый Kafka producer
 func NewKafkaProducer(brokers []string, topic string) KafkaProducer {
 	writer := &kafka.Writer{
 		Addr:     kafka.TCP(brokers...),
@@ -44,13 +42,12 @@ func NewKafkaProducer(brokers []string, topic string) KafkaProducer {
 
 // SendTaskEvent отправляет событие задачи в Kafka
 func (p *kafkaProducer) SendTaskEvent(ctx context.Context, event TaskEvent) error {
-	// Сериализуем событие в JSON
+
 	eventJSON, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
-	// Отправляем сообщение в Kafka
 	message := kafka.Message{
 		Key:   []byte(event.TaskID),
 		Value: eventJSON,

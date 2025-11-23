@@ -49,7 +49,7 @@ func (s *taskService) CreateTask(ctx context.Context, message string, workerID, 
 }
 
 func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, status, reason *string) (Task, error) {
-	// Проверяем существование задачи
+
 	existingTask, err := s.repo.GetTask(ctx, id)
 	if err != nil {
 		return Task{}, err
@@ -59,7 +59,6 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, sta
 		UpdatedAt: time.Now(),
 	}
 
-	// Обновляем message, если передан
 	if message != nil {
 		if *message == "" {
 			return Task{}, errors.New("message cannot be empty")
@@ -67,7 +66,6 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, sta
 		updates.Message = *message
 	}
 
-	// Обновляем status, если передан
 	if status != nil {
 		validStatus := Status(*status)
 		if validStatus != StatusInProgress && validStatus != StatusCompleted && validStatus != StatusNeedsHelp {
@@ -75,37 +73,32 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, sta
 		}
 		updates.Status = validStatus
 
-		// Если статус NEEDS_HELP, требуется reason
 		if validStatus == StatusNeedsHelp {
 			if reason == nil || *reason == "" {
 				return Task{}, errors.New("reason is required when status is NEEDS_HELP")
 			}
 			updates.Reason = reason
 		} else {
-			// Для других статусов reason очищаем
+
 			updates.Reason = nil
 		}
 	} else if reason != nil {
-		// Если передан reason, но статус не меняется
-		// reason можно обновить только если текущий статус NEEDS_HELP
+
 		if existingTask.Status == StatusNeedsHelp {
 			updates.Reason = reason
 		}
-		// Если текущий статус не NEEDS_HELP, игнорируем reason (не обновляем)
+
 	}
 
-	// Обновляем задачу
 	if err := s.repo.UpdateTask(ctx, id, updates); err != nil {
 		return Task{}, err
 	}
 
-	// Получаем обновлённую задачу
 	task, err := s.repo.GetTask(ctx, id)
 	if err != nil {
 		return Task{}, err
 	}
 
-	// Если статус изменился на NEEDS_HELP, отправляем событие в Kafka
 	if status != nil && Status(*status) == StatusNeedsHelp && existingTask.Status != StatusNeedsHelp {
 		if s.kafkaProducer != nil {
 			event := TaskEvent{
@@ -115,11 +108,10 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, sta
 				Reason:    *reason,
 				Timestamp: time.Now(),
 			}
-			// Отправляем событие асинхронно (не блокируем ответ)
+
 			go func() {
 				if err := s.kafkaProducer.SendTaskEvent(context.Background(), event); err != nil {
-					// Логируем ошибку (в production лучше использовать structured logging)
-					// log.Printf("failed to send task event to kafka: %v", err)
+
 				}
 			}()
 		}
@@ -129,7 +121,7 @@ func (s *taskService) UpdateTask(ctx context.Context, id uuid.UUID, message, sta
 }
 
 func (s *taskService) TaskList(ctx context.Context, workerID, createdBy *uuid.UUID, status *string) ([]Task, error) {
-	// Валидация status, если передан
+
 	if status != nil {
 		validStatus := Status(*status)
 		if validStatus != StatusInProgress && validStatus != StatusCompleted && validStatus != StatusNeedsHelp {

@@ -16,16 +16,21 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+type minioStorage struct {
+	client     *minio.Client
+	bucketName string
+}
+
+func hashSHA256(data []byte) string {
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
 type ObjectStorage interface {
 	Save(ctx context.Context, filename string, contentType string, data []byte) (objectKey string, checksum string, size int64, err error)
 	Delete(ctx context.Context, objectKey string) error
 	Get(ctx context.Context, objectKey string) (io.ReadCloser, int64, error)
 	Bucket() string
-}
-
-type minioStorage struct {
-	client     *minio.Client
-	bucketName string
 }
 
 func NewMinioStorage(endpoint, accessKey, secretKey string, useSSL bool, bucket string) (ObjectStorage, error) {
@@ -95,9 +100,4 @@ func (s *minioStorage) Get(ctx context.Context, objectKey string) (io.ReadCloser
 
 func (s *minioStorage) Bucket() string {
 	return s.bucketName
-}
-
-func hashSHA256(data []byte) string {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
 }

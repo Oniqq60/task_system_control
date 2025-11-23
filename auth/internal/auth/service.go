@@ -12,6 +12,7 @@ type UserService interface {
 	Register(ctx context.Context, u Users) error
 	Login(ctx context.Context, email string, password string) (Users, Claims, error)
 	Profile(ctx context.Context, userID uuid.UUID) (Users, error)
+	GetManager(ctx context.Context, userID uuid.UUID) (uuid.UUID, bool, error)
 }
 
 var ErrUserNotFound = errors.New("user not found")
@@ -31,7 +32,7 @@ func NewUserService(repo UserRepository, jwtSecret []byte, jwtTTLSeconds int64) 
 }
 
 func (r *userService) Register(ctx context.Context, u Users) error {
-	// hash password before storing
+
 	hashed, err := HashPassword(u.Password_hash)
 	if err != nil {
 		return err
@@ -59,4 +60,20 @@ func (r *userService) Profile(ctx context.Context, userID uuid.UUID) (Users, err
 	}
 	user.Password_hash = ""
 	return user, nil
+}
+
+func (r *userService) GetManager(ctx context.Context, userID uuid.UUID) (uuid.UUID, bool, error) {
+	user, err := r.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return uuid.UUID{}, false, ErrUserNotFound
+		}
+		return uuid.UUID{}, false, err
+	}
+
+	if user.ManagerID == nil {
+		return uuid.UUID{}, false, nil
+	}
+
+	return *user.ManagerID, true, nil
 }

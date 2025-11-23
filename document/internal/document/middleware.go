@@ -8,23 +8,19 @@ import (
 // SecurityHeadersMiddleware добавляет security headers ко всем ответам
 func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Защита от XSS
+
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 
-		// Content Security Policy
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';")
 
-		// Strict Transport Security (только если HTTPS)
 		if r.TLS != nil {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 
-		// Referrer Policy
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Permissions Policy
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
 		next.ServeHTTP(w, r)
@@ -35,13 +31,12 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 func CORSMiddleware(next http.Handler) http.Handler {
 	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "*" // По умолчанию разрешаем все (для разработки)
+		allowedOrigins = "*"
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		// Если origin в списке разрешенных или разрешены все
 		if allowedOrigins == "*" || origin == allowedOrigins {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 		}
@@ -51,7 +46,6 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Max-Age", "3600")
 
-		// Обработка preflight запросов
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

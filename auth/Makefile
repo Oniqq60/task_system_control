@@ -43,11 +43,7 @@ up:
 
 # Откатить одну миграцию (или N: make down n=2)
 down:
-	@if [ -n "$(n)" ]; then \
-		$(MIGRATE) -path $(MIGRATIONS_DIR) -database $(DB_URL) down $(n); \
-	else \
-		$(MIGRATE) -path $(MIGRATIONS_DIR) -database $(DB_URL) down 1; \
-	fi
+	$(MIGRATE) -path $(MIGRATIONS_DIR) -database $(DB_URL) down $(if $(n),$(n),1)
 
 # Текущая версия миграций
 version:

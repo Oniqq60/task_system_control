@@ -45,19 +45,17 @@ func LoadConfig() Config {
 		RedisPassword:   os.Getenv("REDIS_PASSWORD"),
 	}
 
-	// MINIO_USE_SSL optional
 	if os.Getenv("MINIO_USE_SSL") == "true" || os.Getenv("MINIO_USE_SSL") == "1" {
 		cfg.MinioUseSSL = true
 	}
 
-	// MAX_FILE_SIZE optional, default 10MB
 	if maxStr := os.Getenv("MAX_FILE_SIZE"); maxStr != "" {
 		if v, err := strconv.ParseInt(maxStr, 10, 64); err == nil {
 			cfg.MaxFileSizeBytes = v
 		}
 	}
 	if cfg.MaxFileSizeBytes == 0 {
-		cfg.MaxFileSizeBytes = 10 * 1024 * 1024 // 10 MB
+		cfg.MaxFileSizeBytes = 10 * 1024 * 1024
 	}
 
 	return cfg

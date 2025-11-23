@@ -1,0 +1,672 @@
+{
+	"info": {
+		"name": "API Gateway - Task System Control",
+		"description": "Полная коллекция для тестирования всех эндпоинтов через API Gateway",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register - Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"admin_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Admin User\",\n    \"email\": \"admin@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"role\": \"admin\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register - Employee",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"employee_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Employee User\",\n    \"email\": \"employee@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"role\": \"employee\",\n    \"manager_id\": \"{{admin_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login - Admin",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"admin_token\", jsonData.access_token);",
+									"    pm.environment.set(\"admin_user_id\", jsonData.user_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@example.com\",\n    \"password\": \"SecurePassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login - Employee",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"employee_token\", jsonData.access_token);",
+									"    pm.environment.set(\"employee_user_id\", jsonData.user_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"employee@example.com\",\n    \"password\": \"SecurePassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Validate Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"token\": \"{{admin_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/validate",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "validate"]
+						},
+						"description": "Можно передать токен в body или использовать Authorization header"
+					}
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Create Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"task_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"message\": \"Выполнить анализ данных за Q1 2025\",\n    \"worker_id\": \"{{employee_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/task",
+							"host": ["{{base_url}}"],
+							"path": ["task"]
+						}
+					}
+				},
+				{
+					"name": "Update Task - Change Status to IN_PROGRESS",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"IN_PROGRESS\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/task/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Task - Change Status to NEEDS_HELP",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"NEEDS_HELP\",\n    \"reason\": \"Не хватает данных для анализа. Нужен доступ к базе данных за март 2025.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/task/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Task - Change Status to COMPLETED",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"COMPLETED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/task/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Task - Change Message",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"message\": \"Выполнить расширенный анализ данных за Q1 2025 с учетом новых требований\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/task/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Task List - All",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/task",
+							"host": ["{{base_url}}"],
+							"path": ["task"]
+						}
+					}
+				},
+				{
+					"name": "Get Task List - By Worker",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/task?worker_id={{employee_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task"],
+							"query": [
+								{
+									"key": "worker_id",
+									"value": "{{employee_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Task List - By Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/task?status=IN_PROGRESS",
+							"host": ["{{base_url}}"],
+							"path": ["task"],
+							"query": [
+								{
+									"key": "status",
+									"value": "IN_PROGRESS",
+									"description": "Возможные значения: IN_PROGRESS, COMPLETED, NEEDS_HELP"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Task List - By Created By",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/task?created_by={{admin_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task"],
+							"query": [
+								{
+									"key": "created_by",
+									"value": "{{admin_user_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Task List - Combined Filters",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/task?worker_id={{employee_id}}&status=COMPLETED&created_by={{admin_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["task"],
+							"query": [
+								{
+									"key": "worker_id",
+									"value": "{{employee_id}}"
+								},
+								{
+									"key": "status",
+									"value": "COMPLETED"
+								},
+								{
+									"key": "created_by",
+									"value": "{{admin_user_id}}"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Documents",
+			"item": [
+				{
+					"name": "Add Document - JSON (Base64)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"document_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"task_id\": \"{{task_id}}\",\n    \"filename\": \"report.pdf\",\n    \"content_type\": \"application/pdf\",\n    \"file_base64\": \"JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNjEyIDc5Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9GMSA0IDAgUgo+Pgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9MZW5ndGggNDQKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFRkCihUZXN0IFBERikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNjEgMDAwMDAgbiAKMDAwMDAwMDMxOCAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjQwNQolJUVPRgo=\",\n    \"tags\": [\"report\", \"q1-2025\", \"analysis\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/document",
+							"host": ["{{base_url}}"],
+							"path": ["document"]
+						},
+						"description": "Добавление документа через JSON с base64-кодированным содержимым. Поддерживаемые типы: PDF, DOC, DOCX, TXT, XLS, XLSX, PNG, JPEG"
+					}
+				},
+				{
+					"name": "Add Document - Multipart Form Data",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"document_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "task_id",
+									"value": "{{task_id}}",
+									"type": "text"
+								},
+								{
+									"key": "filename",
+									"value": "screenshot.png",
+									"type": "text"
+								},
+								{
+									"key": "content_type",
+									"value": "image/png",
+									"type": "text"
+								},
+								{
+									"key": "tags",
+									"value": "screenshot,proof",
+									"type": "text",
+									"description": "Теги через запятую"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Выберите файл для загрузки"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/document",
+							"host": ["{{base_url}}"],
+							"path": ["document"]
+						},
+						"description": "Добавление документа через multipart/form-data. В поле 'file' выберите файл из вашей файловой системы."
+					}
+				},
+				{
+					"name": "Add Document - Image JPEG",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"document_id\", jsonData.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"task_id\": \"{{task_id}}\",\n    \"filename\": \"photo.jpg\",\n    \"content_type\": \"image/jpeg\",\n    \"file_base64\": \"/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A\",\n    \"tags\": [\"photo\", \"evidence\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/document",
+							"host": ["{{base_url}}"],
+							"path": ["document"]
+						}
+					}
+				},
+				{
+					"name": "Get Document",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/document/{{document_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["document", "{{document_id}}"]
+						},
+						"description": "Возвращает документ с base64-кодированным содержимым в поле file_base64"
+					}
+				},
+				{
+					"name": "Get Documents by Task",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/document/task/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["document", "task", "{{task_id}}"]
+						},
+						"description": "Только для админов. Возвращает список всех документов, прикрепленных к задаче"
+					}
+				},
+				{
+					"name": "Get Documents by Owner",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/document/owner",
+							"host": ["{{base_url}}"],
+							"path": ["document", "owner"]
+						},
+						"description": "Возвращает все документы текущего пользователя (owner_id берется из JWT токена)"
+					}
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{employee_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/document/{{document_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["document", "{{document_id}}"]
+						},
+						"description": "Удаляет документ. Может удалить только владелец документа или админ"
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8084",
+			"type": "string"
+		}
+	]
+}
+

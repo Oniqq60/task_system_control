@@ -2,18 +2,20 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
-	iauth "github.com/Oniqq60/task_system_control/auth/internal/auth"
-	"github.com/Oniqq60/task_system_control/auth/internal/cfg"
-	pb "github.com/Oniqq60/task_system_control/gen/proto/auth"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/Oniqq60/task_system_control/auth/internal/auth"
+	appcfg "github.com/Oniqq60/task_system_control/auth/internal/cfg"
+	pb "github.com/Oniqq60/task_system_control/gen/proto/auth/v1"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
@@ -21,107 +23,122 @@ import (
 )
 
 func main() {
-	cfg := cfg.LoadConfig()
+	cfg := appcfg.LoadConfig()
+	logger := log.New(os.Stdout, "[auth] ", log.LstdFlags|log.Lmicroseconds)
 
-	// Build Postgres DSN. If you manage SSL externally, set sslmode accordingly via env in future.
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
-	)
-
-	// Connect Postgres using pgx stdlib driver
-	db, err := sql.Open("pgx", dsn)
+	db := mustInitDB(cfg)
+	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("postgres open error: %v", err)
+		logger.Fatalf("failed to access sql DB: %v", err)
 	}
-	defer db.Close()
+	defer sqlDB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		log.Fatalf("postgres ping error: %v", err)
-	}
-	log.Println("postgres connected")
-
-	// Connect Redis
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddr,     // e.g. "localhost:6379"
-		Password: cfg.RedisPassword, // empty if no auth
-		DB:       0,
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
 	})
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("redis ping error: %v", err)
-	}
-	log.Println("redis connected")
+	defer redisClient.Close()
 
-	// Init GORM for repository layer
-	gormDB, err := gorm.Open(postgres.New(postgres.Config{DSN: dsn}), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("gorm open error: %v", err)
-	}
-
-	// JWT config
 	jwtSecret := []byte(cfg.JWTSecret)
-	if len(jwtSecret) < 32 {
-		log.Fatalf("JWT_SECRET must be at least 32 characters long for security")
-	}
-	ttlSeconds := int64(3600)
-	if cfg.JWTTTL != "" {
-		if v, err := strconv.Atoi(cfg.JWTTTL); err == nil {
-			ttlSeconds = int64(v)
-		}
-	}
+	jwtTTL := parseTTL(cfg.JWTTTL, 3600)
 
-	// Wire
-	repo := iauth.NewRepository(gormDB)
-	service := iauth.NewUserService(repo, jwtSecret, ttlSeconds)
-	handler := iauth.NewUserHandler(service, jwtSecret, rdb)
-	grpcHandler := iauth.NewGrpcHandler(service, jwtSecret, rdb)
+	repo := auth.NewRepository(db)
+	userService := auth.NewUserService(repo, jwtSecret, jwtTTL)
 
-	// HTTP Server with middleware
-	mux := http.NewServeMux()
-	mux.HandleFunc("/auth/register", handler.Register)
-	mux.HandleFunc("/auth/login", handler.Login)
-	mux.HandleFunc("/auth/logout", handler.Logout)
-	mux.HandleFunc("/auth/profile", handler.Profile)
+	grpcHandler := auth.NewGrpcHandler(userService, jwtSecret, redisClient)
 
-	// Применяем middleware
-	handlerWithMiddleware := iauth.SecurityHeadersMiddleware(
-		iauth.CORSMiddleware(
-			iauth.RequestSizeLimitMiddleware(1024 * 1024)(mux), // 1MB limit
-		),
-	)
-
-	httpPort := cfg.HTTPPort
-	if httpPort == "" {
-		httpPort = "8080"
+	httpMux := http.NewServeMux()
+	httpServer := &http.Server{
+		Addr:    ":" + pickPort(cfg.HTTPPort, "8080"),
+		Handler: applyHTTPMiddleware(httpMux),
 	}
 
-	// gRPC Server
-	grpcPort := cfg.GrpsPort
-	if grpcPort == "" {
-		grpcPort = "9090"
-	}
-
-	grpcListener, err := net.Listen("tcp", ":"+grpcPort)
+	grpcListener, err := net.Listen("tcp", ":"+pickPort(cfg.GrpsPort, "9090"))
 	if err != nil {
-		log.Fatalf("failed to listen on gRPC port %s: %v", grpcPort, err)
+		logger.Fatalf("failed to listen on gRPC port: %v", err)
 	}
-
 	grpcServer := grpc.NewServer()
 	pb.RegisterAuthServiceServer(grpcServer, grpcHandler)
 
-	// Запускаем gRPC сервер в отдельной goroutine
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 2)
+
 	go func() {
-		log.Printf("gRPC server listening on :%s", grpcPort)
-		if err := grpcServer.Serve(grpcListener); err != nil {
-			log.Fatalf("gRPC server error: %v", err)
+		logger.Printf("HTTP server listening on %s", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("http server: %w", err)
 		}
 	}()
 
-	// Запускаем HTTP сервер
-	srv := &http.Server{Addr: ":" + httpPort, Handler: handlerWithMiddleware}
-	log.Printf("http server listening on :%s", httpPort)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("http server error: %v", err)
+	go func() {
+		logger.Printf("gRPC server listening on %s", grpcListener.Addr().String())
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			errCh <- fmt.Errorf("grpc server: %w", err)
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Println("shutdown signal received")
+	case err := <-errCh:
+		logger.Printf("server error: %v", err)
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		logger.Printf("http shutdown error: %v", err)
+	}
+	grpcServer.GracefulStop()
+	logger.Println("auth service stopped")
+}
+
+func mustInitDB(cfg appcfg.Config) *gorm.DB {
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.DBHost,
+		cfg.DBPort,
+		cfg.DBUser,
+		cfg.DBPassword,
+		cfg.DBName,
+	)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("failed to init sql DB: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	return db
+}
+
+func applyHTTPMiddleware(mux *http.ServeMux) http.Handler {
+	handler := http.Handler(mux)
+	handler = auth.RequestSizeLimitMiddleware(5 << 20)(handler)
+	handler = auth.CORSMiddleware(handler)
+	handler = auth.SecurityHeadersMiddleware(handler)
+	return handler
+}
+
+func pickPort(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func parseTTL(value string, fallback int64) int64 {
+	if secs, err := strconv.ParseInt(value, 10, 64); err == nil && secs > 0 {
+		return secs
+	}
+	return fallback
 }

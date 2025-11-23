@@ -15,10 +15,20 @@ import (
 
 type GrpcHandler struct {
 	pb.UnimplementedDocumentServiceServer
-	service   Service
-	maxSize   int64
-	jwtSecret []byte
-	auth      Authorizer
+	service Service
+	maxSize int64
+	auth    Authorizer
+}
+
+var (
+	errUnauthorized      = errors.New("unauthorized")
+	tokenBlacklistPrefix = "auth:token:blacklist:"
+)
+
+type authClaims struct {
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
+	jwt.RegisteredClaims
 }
 
 type Authorizer interface {
@@ -142,77 +152,6 @@ func (h *GrpcHandler) GetDocumentsByOwner(ctx context.Context, req *pb.GetDocume
 	}, nil
 }
 
-func (h *GrpcHandler) authorize(ctx context.Context) (Requester, error) {
-	token, err := extractAuthorizationToken(ctx)
-	if err != nil {
-		return Requester{}, status.Error(codes.Unauthenticated, "unauthorized")
-	}
-	req, err := h.auth.Authorize(ctx, token)
-	if err != nil {
-		return Requester{}, status.Error(codes.Unauthenticated, "unauthorized")
-	}
-	return req, nil
-}
-
-func handleServiceErr(err error) error {
-	switch {
-	case errors.Is(err, ErrForbidden):
-		return status.Error(codes.PermissionDenied, "forbidden")
-	case errors.Is(err, ErrInvalidDocumentID), errors.Is(err, ErrInvalidTaskID), errors.Is(err, ErrInvalidOwnerID):
-		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, ErrNotFound):
-		return status.Error(codes.NotFound, "document not found")
-	case errors.Is(err, ErrFileTooLarge):
-		return status.Error(codes.ResourceExhausted, err.Error())
-	default:
-		return status.Error(codes.Internal, "internal error")
-	}
-}
-
-func mapDocs(documents []Metadata) []*pb.Document {
-	result := make([]*pb.Document, 0, len(documents))
-	for _, doc := range documents {
-		result = append(result, &pb.Document{
-			Id:          doc.ID.Hex(),
-			Filename:    doc.Filename,
-			ContentType: doc.ContentType,
-			Size:        doc.Size,
-			TaskId:      doc.TaskID,
-			OwnerId:     doc.OwnerID,
-			Tags:        doc.Tags,
-			UploadedAt:  doc.UploadedAt.Unix(),
-		})
-	}
-	return result
-}
-
-func extractAuthorizationToken(ctx context.Context) (string, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return "", errors.New("metadata missing")
-	}
-	values := md.Get("authorization")
-	if len(values) == 0 {
-		return "", errors.New("authorization header missing")
-	}
-	token := strings.TrimSpace(values[0])
-	if token == "" {
-		return "", errors.New("authorization header empty")
-	}
-	if strings.HasPrefix(strings.ToLower(token), "bearer ") {
-		token = strings.TrimSpace(token[7:])
-	}
-	if token == "" {
-		return "", errors.New("authorization token missing")
-	}
-	return token, nil
-}
-
-type metadataAuthorizer struct {
-	jwtSecret []byte
-	redis     *redis.Client
-}
-
 func NewAuthorizer(jwtSecret []byte, redis *redis.Client) Authorizer {
 	return &metadataAuthorizer{
 		jwtSecret: jwtSecret,
@@ -251,4 +190,69 @@ func (a *metadataAuthorizer) Authorize(ctx context.Context, token string) (Reque
 		UserID: claims.UserID,
 		Role:   Role(strings.ToLower(claims.Role)),
 	}, nil
+}
+
+type metadataAuthorizer struct {
+	jwtSecret []byte
+	redis     *redis.Client
+}
+
+func (h *GrpcHandler) authorize(ctx context.Context) (Requester, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return Requester{}, errUnauthorized
+	}
+
+	tokens := md.Get("authorization")
+	if len(tokens) == 0 {
+		return Requester{}, errUnauthorized
+	}
+
+	token := strings.TrimPrefix(tokens[0], "Bearer ")
+	return h.auth.Authorize(ctx, token)
+}
+
+func mapDocs(metas []Metadata) []*pb.Document {
+	pbDocs := make([]*pb.Document, 0, len(metas))
+	for _, m := range metas {
+		pbDocs = append(pbDocs, &pb.Document{
+			Id:          m.ID.Hex(),
+			Filename:    m.Filename,
+			ContentType: m.ContentType,
+			Size:        m.Size,
+			TaskId:      m.TaskID,
+			OwnerId:     m.OwnerID,
+			Tags:        m.Tags,
+			UploadedAt:  m.UploadedAt.Unix(),
+		})
+	}
+	return pbDocs
+}
+
+func handleServiceErr(err error) error {
+	if errors.Is(err, ErrForbidden) {
+		return status.Error(codes.PermissionDenied, err.Error())
+	}
+	if errors.Is(err, ErrFileTooLarge) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrInvalidContentType) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrInvalidDocumentID) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrInvalidTaskID) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrInvalidOwnerID) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrEmptyFilename) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if errors.Is(err, ErrEmptyContent) {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	return status.Error(codes.Internal, err.Error())
 }

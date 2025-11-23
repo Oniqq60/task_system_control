@@ -30,6 +30,20 @@ func NewRepository(collection *mongo.Collection) Repository {
 	}
 }
 
+func (r *mongoRepository) findMany(ctx context.Context, filter bson.M) ([]Metadata, error) {
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []Metadata
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func (r *mongoRepository) Insert(ctx context.Context, metadata Metadata) (primitive.ObjectID, error) {
 	now := time.Now()
 	metadata.UploadedAt = now
@@ -76,27 +90,4 @@ func (r *mongoRepository) FindByTask(ctx context.Context, taskID string) ([]Meta
 
 func (r *mongoRepository) FindByOwner(ctx context.Context, ownerID string) ([]Metadata, error) {
 	return r.findMany(ctx, bson.M{"owner_id": ownerID})
-}
-
-func (r *mongoRepository) findMany(ctx context.Context, filter bson.M) ([]Metadata, error) {
-	cur, err := r.collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(ctx)
-
-	var docs []Metadata
-	for cur.Next(ctx) {
-		var doc Metadata
-		if err := cur.Decode(&doc); err != nil {
-			return nil, err
-		}
-		docs = append(docs, doc)
-	}
-
-	if err := cur.Err(); err != nil {
-		return nil, err
-	}
-
-	return docs, nil
 }

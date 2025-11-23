@@ -22,7 +22,7 @@ func NewRepository(db *gorm.DB) UserRepository {
 }
 
 func (s *userRepository) RegisterUser(ctx context.Context, u Users) error {
-	// Ensure email unique handled by DB constraint; propagate error
+
 	return s.db.WithContext(ctx).Create(&u).Error
 }
 
@@ -35,7 +35,7 @@ func (s *userRepository) LoginUser(ctx context.Context, email string, password s
 	if err := CheckPassword(user.Password_hash, password); err != nil {
 		return Users{}, Claims{}, err
 	}
-	// Claims are created at service layer (need secret and ttl), return user only here
+
 	return user, Claims{}, nil
 }
 

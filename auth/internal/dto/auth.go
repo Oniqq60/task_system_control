@@ -3,10 +3,11 @@ package dto
 import "time"
 
 type RegisterRequest struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	Role      string `json:"role"`
+	ManagerID string `json:"manager_id"`
 }
 
 type RegisterResponse struct {
@@ -30,6 +31,7 @@ type ProfileResponse struct {
 	Name           string    `json:"name"`
 	Email          string    `json:"email"`
 	Role           string    `json:"role"`
+	ManagerID      string    `json:"manager_id,omitempty"`
 	CompletedTasks int64     `json:"completed_tasks"`
 	CreatedAt      time.Time `json:"created_at"`
 }

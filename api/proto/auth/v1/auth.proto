@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package auth.v1;
 
-option go_package = "github.com/Oniqq60/task_system_control/gen/proto/auth";
+option go_package = "github.com/Oniqq60/task_system_control/gen/proto/auth/v1;auth";
 
 // AuthService предоставляет методы для аутентификации и авторизации
 service AuthService {
@@ -14,6 +14,9 @@ service AuthService {
   
   // ValidateToken проверяет валидность JWT токена и возвращает информацию о пользователе
   rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // GetManager возвращает менеджера сотрудника (если есть)
+  rpc GetManager(GetManagerRequest) returns (GetManagerResponse);
 }
 
 // RegisterRequest - запрос на регистрацию
@@ -22,6 +25,7 @@ message RegisterRequest {
   string email = 2;       // Email (уникальный)
   string password = 3;    // Пароль (будет захеширован)
   string role = 4;        // Роль: "admin" или "employee" (по умолчанию "employee")
+  string manager_id = 5;  // UUID менеджера (опционально, только для сотрудников)
 }
 
 // RegisterResponse - ответ на регистрацию
@@ -57,5 +61,17 @@ message ValidateTokenResponse {
   string user_id = 2;   // ID пользователя (если валиден)
   string role = 3;      // Роль пользователя (если валиден)
   string error = 4;      // Сообщение об ошибке (если токен невалиден)
+}
+
+// GetManagerRequest - запрос на получение менеджера пользователя
+message GetManagerRequest {
+  string user_id = 1; // UUID сотрудника
+}
+
+// GetManagerResponse - ответ с manager_id
+message GetManagerResponse {
+  string manager_id = 1; // UUID менеджера (если найден)
+  bool found = 2;        // Есть ли менеджер
+  string error = 3;      // Сообщение об ошибке (если есть)
 }
 

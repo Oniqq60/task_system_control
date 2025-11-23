@@ -22,6 +22,7 @@ const (
 	AuthService_Register_FullMethodName      = "/auth.v1.AuthService/Register"
 	AuthService_Login_FullMethodName         = "/auth.v1.AuthService/Login"
 	AuthService_ValidateToken_FullMethodName = "/auth.v1.AuthService/ValidateToken"
+	AuthService_GetManager_FullMethodName    = "/auth.v1.AuthService/GetManager"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -36,6 +37,8 @@ type AuthServiceClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	// ValidateToken проверяет валидность JWT токена и возвращает информацию о пользователе
 	ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error)
+	// GetManager возвращает менеджера сотрудника (если есть)
+	GetManager(ctx context.Context, in *GetManagerRequest, opts ...grpc.CallOption) (*GetManagerResponse, error)
 }
 
 type authServiceClient struct {
@@ -76,6 +79,16 @@ func (c *authServiceClient) ValidateToken(ctx context.Context, in *ValidateToken
 	return out, nil
 }
 
+func (c *authServiceClient) GetManager(ctx context.Context, in *GetManagerRequest, opts ...grpc.CallOption) (*GetManagerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetManagerResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetManager_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -88,6 +101,8 @@ type AuthServiceServer interface {
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	// ValidateToken проверяет валидность JWT токена и возвращает информацию о пользователе
 	ValidateToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error)
+	// GetManager возвращает менеджера сотрудника (если есть)
+	GetManager(context.Context, *GetManagerRequest) (*GetManagerResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -106,6 +121,9 @@ func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*Lo
 }
 func (UnimplementedAuthServiceServer) ValidateToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateToken not implemented")
+}
+func (UnimplementedAuthServiceServer) GetManager(context.Context, *GetManagerRequest) (*GetManagerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetManager not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -182,6 +200,24 @@ func _AuthService_ValidateToken_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetManager_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetManagerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetManager(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetManager_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetManager(ctx, req.(*GetManagerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,6 +236,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidateToken",
 			Handler:    _AuthService_ValidateToken_Handler,
+		},
+		{
+			MethodName: "GetManager",
+			Handler:    _AuthService_GetManager_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

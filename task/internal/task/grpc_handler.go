@@ -3,14 +3,12 @@ package task
 import (
 	"context"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	pb "github.com/Oniqq60/task_system_control/gen/proto/task"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// GrpcHandler реализует gRPC сервер для Task Service
 type GrpcHandler struct {
 	pb.UnimplementedTaskServiceServer
 	service TaskService
@@ -29,25 +27,21 @@ func (h *GrpcHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 		return nil, status.Error(codes.InvalidArgument, "message is required")
 	}
 
-	// Парсим workerID из строки в uuid.UUID
 	workerID, err := uuid.Parse(req.WorkerId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid worker_id")
 	}
 
-	// Парсим createdBy из строки в uuid.UUID
 	createdBy, err := uuid.Parse(req.CreatedBy)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid created_by")
 	}
 
-	// Вызываем service
 	task, err := h.service.CreateTask(ctx, req.Message, workerID, createdBy)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// Конвертируем Task в protobuf CreateTaskResponse
 	return &pb.CreateTaskResponse{
 		Id:        task.ID.String(),
 		Message:   task.Message,
@@ -63,7 +57,6 @@ func (h *GrpcHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		return nil, status.Error(codes.InvalidArgument, "id is required")
 	}
 
-	// Парсим id из строки в uuid.UUID
 	id, err := uuid.Parse(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
@@ -85,13 +78,11 @@ func (h *GrpcHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		reason = &req.Reason
 	}
 
-	// Вызываем service
 	task, err := h.service.UpdateTask(ctx, id, message, statusStr, reason)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// Конвертируем Task в protobuf UpdateTaskResponse
 	resp := &pb.UpdateTaskResponse{
 		Id:       task.ID.String(),
 		Message:  task.Message,
@@ -131,13 +122,11 @@ func (h *GrpcHandler) TaskList(ctx context.Context, req *pb.TaskListRequest) (*p
 		statusStr = &req.Status
 	}
 
-	// Вызываем service
 	tasks, err := h.service.TaskList(ctx, workerID, createdBy, statusStr)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	// Конвертируем список задач в protobuf Task
 	pbTasks := make([]*pb.Task, 0, len(tasks))
 	for _, task := range tasks {
 		pbTask := &pb.Task{
