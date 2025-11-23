@@ -47,7 +47,8 @@ make up
 5. Выбираем файл, задаём content_type (в случае pdf файла "application/pdf") и желательно задать имя файлу и теги во избежинии путаницы
    <img width="1360" height="1104" alt="Image" src="https://github.com/user-attachments/assets/357461d8-2e54-4c35-bbce-b91dce3a3a8c" />
 
-6. ![Что бы не просто посмотреть файл, а так же его сохранить используем кнопку Send and Download](.\img\untitled (3).png) 
+6. Что бы не просто посмотреть файл, а так же его сохранить используем кнопку Send and Download
+   <img width="1360" height="1104" alt="Image" src="https://github.com/user-attachments/assets/44b51a5f-ce28-4880-89bf-76512fb0bb67" />
     
 ## Базы данных
 
